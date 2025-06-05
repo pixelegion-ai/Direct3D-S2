@@ -304,8 +304,9 @@ class Direct3DS2Pipeline(object):
         generator: Optional[torch.Generator] = None,
         remesh: bool = False,
         simplify_ratio: float = 0.95,
-        dense_mc_threshold: float = 0.1, # CHANGED
-        sparse_mc_threshold: float = 0.2): # CHANGED
+        dense_mc_threshold: float = 0.1,
+        sparse_512_mc_threshold: float = 0.2, # New
+        sparse_1024_mc_threshold: float = 0.2): # New
 
         image = self.prepare_image(image)
         
@@ -324,8 +325,8 @@ class Direct3DS2Pipeline(object):
             # Use sparse_512 models for the final sparse stage
             mesh = self.inference(image, self.sparse_vae_512, self.sparse_dit_512,
                                     self.sparse_image_encoder, self.sparse_scheduler_512,
-                                    generator=generator, mode='sparse', # CHANGED
-                                    mc_threshold=sparse_mc_threshold, latent_index=latent_index,
+                                    generator=generator, mode='sparse',
+                                    mc_threshold=sparse_512_mc_threshold, latent_index=latent_index,
                                     remove_interior=False, # Final sparse stage for this path
                                     target_voxel_resolution=sdf_resolution,
                                     **sparse_512_sampler_params)[0]
@@ -333,8 +334,8 @@ class Direct3DS2Pipeline(object):
             # Intermediate step using sparse_512 models, output will be refined
             intermediate_mesh_output = self.inference(image, self.sparse_vae_512, self.sparse_dit_512,
                                     self.sparse_image_encoder, self.sparse_scheduler_512,
-                                    generator=generator, mode='sparse', # CHANGED
-                                    mc_threshold=sparse_mc_threshold, 
+                                    generator=generator, mode='sparse',
+                                    mc_threshold=sparse_512_mc_threshold, # Use 512's MC threshold
                                     latent_index=latent_index,
                                     remove_interior=True, # Refine output for the next stage
                                     # target_voxel_resolution not passed, VAE uses its default
@@ -355,8 +356,8 @@ class Direct3DS2Pipeline(object):
             # Final sparse stage using sparse_1024 models
             mesh = self.inference(image, self.sparse_vae_1024, self.sparse_dit_1024,
                                 self.sparse_image_encoder, self.sparse_scheduler_1024,
-                                generator=generator, mode='sparse', # CHANGED
-                                mc_threshold=sparse_mc_threshold, latent_index=input_latent_index_for_1024,
+                                generator=generator, mode='sparse',
+                                mc_threshold=sparse_1024_mc_threshold, latent_index=input_latent_index_for_1024,
                                 remove_interior=False, # Final sparse stage
                                 target_voxel_resolution=sdf_resolution,
                                 **sparse_1024_sampler_params)[0]
