@@ -50,16 +50,10 @@ def check_input_image(input_image):
 #  PLACEHOLDER BACK-END HOOKS  ▸  replace with your real logic
 # -----------------------------------------------------------------------------
 def image2mesh(
-    image: Any,
-    resolution: str = '1024',
+    image: Any, 
+    resolution: str = '1024', 
     simplify: bool = True,
-    simplify_ratio: float = 0.95, # This is 'reduce_ratio' from Gradio input
-    dense_steps: int = 50,
-    dense_guidance_scale: float = 7.0,
-    sparse_512_steps: int = 30,
-    sparse_512_guidance_scale: float = 7.0,
-    sparse_1024_steps: int = 15,
-    sparse_1024_guidance_scale: float = 7.0,
+    simplify_ratio: float = 0.95, 
     output_path: str = 'outputs/web'
 ):
     
@@ -75,14 +69,11 @@ def image2mesh(
     pipe.to("cuda:0")
 
     mesh = pipe(
-        image,
-        sdf_resolution=int(resolution),
-        mc_threshold=0.2, # This could also be made configurable
+        image, 
+        sdf_resolution=int(resolution), 
+        mc_threshold=0.2,
         remesh=simplify,
-        simplify_ratio=simplify_ratio, # This is the 'reduce_ratio' from Gradio inputs
-        dense_sampler_params={'num_inference_steps': int(dense_steps), 'guidance_scale': float(dense_guidance_scale)},
-        sparse_512_sampler_params={'num_inference_steps': int(sparse_512_steps), 'guidance_scale': float(sparse_512_guidance_scale)},
-        sparse_1024_sampler_params={'num_inference_steps': int(sparse_1024_steps), 'guidance_scale': float(sparse_1024_guidance_scale)}
+        simplify_ratio=simplify_ratio,
     )["mesh"]
 
     mesh_path = os.path.join(output_path, f'{uid}.obj')
@@ -147,21 +138,6 @@ body { background:linear-gradient(215deg,#101113 0%,#0b0c0d 60%,#0d1014 100%) }
                 resolution = gr.Radio(choices=["512", "1024"], label="SDF Resolution", value="1024")
                 simplify = gr.Checkbox(label="Simplify Mesh", value=True)
                 reduce_ratio = gr.Slider(0.1, 0.95, step=0.05, value=0.95, label="Faces Reduction Ratio")
-
-                with gr.Group():
-                    gr.Markdown("#### Dense Stage")
-                    dense_steps = gr.Slider(minimum=10, maximum=150, step=1, value=50, label="Inference Steps")
-                    dense_guidance_scale = gr.Slider(minimum=1.0, maximum=20.0, step=0.1, value=7.0, label="Guidance Scale")
-
-                with gr.Group():
-                    gr.Markdown("#### Sparse 512 Stage")
-                    sparse_512_steps = gr.Slider(minimum=10, maximum=100, step=1, value=30, label="Inference Steps")
-                    sparse_512_guidance_scale = gr.Slider(minimum=1.0, maximum=20.0, step=0.1, value=7.0, label="Guidance Scale")
-
-                with gr.Group():
-                    gr.Markdown("#### Sparse 1024 Stage")
-                    sparse_1024_steps = gr.Slider(minimum=5, maximum=50, step=1, value=15, label="Inference Steps")
-                    sparse_1024_guidance_scale = gr.Slider(minimum=1.0, maximum=20.0, step=0.1, value=7.0, label="Guidance Scale")
                 
             gen_btn = gr.Button("Generate 3D ✨", variant="primary", interactive=True)
 
@@ -217,12 +193,7 @@ body { background:linear-gradient(215deg,#101113 0%,#0b0c0d 60%,#0d1014 100%) }
         outputs=[processed_image]
     ).success(
         fn=image2mesh, 
-        inputs=[
-            processed_image, resolution, simplify, reduce_ratio,
-            dense_steps, dense_guidance_scale,
-            sparse_512_steps, sparse_512_guidance_scale,
-            sparse_1024_steps, sparse_1024_guidance_scale
-        ],
+        inputs=[processed_image, resolution, simplify, reduce_ratio],
         outputs=outputs, 
         api_name="generate_img2obj"
     )
@@ -233,4 +204,4 @@ if __name__ == "__main__":
     parser.add_argument("--cached_dir", type=str, default="outputs/web")
     args = parser.parse_args()
     
-    demo.queue().launch(share=False, allowed_paths=[args.cached_dir], server_port=7860)
+    demo.queue().launch(share=True, allowed_paths=[args.cached_dir], server_port=7860)
