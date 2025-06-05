@@ -211,22 +211,20 @@ class Direct3DS2Pipeline(object):
             guidance_scale: int = 7.0, 
             generator: Optional[torch.Generator] = None,
             latent_index: torch.Tensor = None,
-            mode: str = 'dense', # 'dense', 'sparse512' or 'sparse1024
+            mode: str, # 'dense' or 'sparse'
             remove_interior: bool = False,
-            mc_threshold: float = 0.02):
+            mc_threshold: float = 0.02,
+            target_voxel_resolution: Optional[int] = None): # ADDED
         
         do_classifier_free_guidance = guidance_scale > 0
-        if mode == 'dense':
-            sparse_conditions = False
-        else:
-            sparse_conditions = dit.sparse_conditions
+        sparse_conditions = dit.sparse_conditions if mode == 'sparse' else False
         cond, uncond = self.encode_image(image, conditioner, 
                                          do_classifier_free_guidance, sparse_conditions)
         batch_size = cond.shape[0]
 
         if mode == 'dense':
             latent_shape = (batch_size, *dit.latent_shape)
-        else:
+        else: # mode == 'sparse'
             latent_shape = (len(latent_index), dit.out_channels)
         latents = torch.randn(latent_shape, dtype=self.dtype, device=self.device, generator=generator)
 
@@ -243,7 +241,7 @@ class Direct3DS2Pipeline(object):
 
             if mode == 'dense':
                 x_input = latent_model_input
-            elif mode in ['sparse512', 'sparse1024']:
+            else: # mode == 'sparse'
                 x_input = sp.SparseTensor(latent_model_input, latent_index.int())
 
             diffusion_inputs = {
@@ -253,13 +251,13 @@ class Direct3DS2Pipeline(object):
             }
 
             noise_pred_cond = dit(**diffusion_inputs)
-            if mode != 'dense':
+            if mode == 'sparse':
                 noise_pred_cond = noise_pred_cond.feats
 
             if do_classifier_free_guidance:
                 diffusion_inputs["cond"] = uncond
                 noise_pred_uncond = dit(**diffusion_inputs)
-                if mode != 'dense':
+                if mode == 'sparse':
                     noise_pred_uncond = noise_pred_uncond.feats
                 noise_pred = noise_pred_uncond + guidance_scale * (noise_pred_cond - noise_pred_uncond)
             else:
@@ -269,7 +267,7 @@ class Direct3DS2Pipeline(object):
         
         latents = 1. / vae.latents_scale * latents + vae.latents_shift
         
-        if mode != 'dense':
+        if mode == 'sparse':
             latents = sp.SparseTensor(latents, latent_index.int())
 
         decoder_inputs = {
@@ -278,10 +276,13 @@ class Direct3DS2Pipeline(object):
         }
         if mode == 'dense':
             decoder_inputs['return_index'] = True
-        elif remove_interior:
-            decoder_inputs['return_feat'] = True
-        if mode == 'sparse1024':
-            decoder_inputs['voxel_resolution'] = 1024
+        elif mode == 'sparse': # For sparse mode
+            if remove_interior: # Intermediate sparse step
+                decoder_inputs['return_feat'] = True
+            elif target_voxel_resolution is not None: # Final sparse step with target resolution
+                decoder_inputs['voxel_resolution'] = target_voxel_resolution
+        # If mode is 'dense', or 'sparse' with remove_interior=True (intermediate),
+        # or target_voxel_resolution is None for final sparse, VAE uses its default voxel_resolution.
 
         outputs = vae.decode_mesh(**decoder_inputs)
 
@@ -303,40 +304,61 @@ class Direct3DS2Pipeline(object):
         generator: Optional[torch.Generator] = None,
         remesh: bool = False,
         simplify_ratio: float = 0.95,
-        mc_threshold: float = 0.2):
+        dense_mc_threshold: float = 0.1, # CHANGED
+        sparse_mc_threshold: float = 0.2): # CHANGED
 
         image = self.prepare_image(image)
         
+        # Dense stage
         latent_index = self.inference(image, self.dense_vae, self.dense_dit, self.dense_image_encoder,
-                                    self.dense_scheduler, generator=generator, mode='dense', mc_threshold=0.1, **dense_sampler_params)[0]
+                                    self.dense_scheduler, generator=generator, mode='dense', 
+                                    mc_threshold=dense_mc_threshold, **dense_sampler_params)[0]
         
         latent_index = sort_block(latent_index, self.sparse_dit_512.selection_block_size)
-
         torch.cuda.empty_cache()
 
-        if sdf_resolution == 512:
-            remove_interior = False
-        else:
-            remove_interior = True
-
-        mesh = self.inference(image, self.sparse_vae_512, self.sparse_dit_512, 
-                                self.sparse_image_encoder, self.sparse_scheduler_512, 
-                                generator=generator, mode='sparse512', 
-                                mc_threshold=mc_threshold, latent_index=latent_index, 
-                                remove_interior=remove_interior, **sparse_512_sampler_params)[0]
-
-        if sdf_resolution == 1024:
+        # Sparse stage
+        # Determine which sparse models to use based on sdf_resolution
+        # (Using 512 as the threshold to switch to _1024 models for higher resolutions)
+        if sdf_resolution <= 512: 
+            # Use sparse_512 models for the final sparse stage
+            mesh = self.inference(image, self.sparse_vae_512, self.sparse_dit_512,
+                                    self.sparse_image_encoder, self.sparse_scheduler_512,
+                                    generator=generator, mode='sparse', # CHANGED
+                                    mc_threshold=sparse_mc_threshold, latent_index=latent_index,
+                                    remove_interior=False, # Final sparse stage for this path
+                                    target_voxel_resolution=sdf_resolution,
+                                    **sparse_512_sampler_params)[0]
+        else: # sdf_resolution > 512, use sparse_1024 models for final output
+            # Intermediate step using sparse_512 models, output will be refined
+            intermediate_mesh_output = self.inference(image, self.sparse_vae_512, self.sparse_dit_512,
+                                    self.sparse_image_encoder, self.sparse_scheduler_512,
+                                    generator=generator, mode='sparse', # CHANGED
+                                    mc_threshold=sparse_mc_threshold, 
+                                    latent_index=latent_index,
+                                    remove_interior=True, # Refine output for the next stage
+                                    # target_voxel_resolution not passed, VAE uses its default
+                                    **sparse_512_sampler_params)
+            
+            intermediate_mesh = intermediate_mesh_output[0]
             del latent_index
             torch.cuda.empty_cache()
-            mesh = normalize_mesh(mesh)
-            latent_index = mesh2index(mesh, size=1024, factor=8)
-            latent_index = sort_block(latent_index, self.sparse_dit_1024.selection_block_size)
-            print(f"number of latent tokens: {len(latent_index)}")
 
-            mesh = self.inference(image, self.sparse_vae_1024, self.sparse_dit_1024, 
-                                self.sparse_image_encoder, self.sparse_scheduler_1024, 
-                                generator=generator, mode='sparse1024', 
-                                mc_threshold=mc_threshold, latent_index=latent_index, 
+            intermediate_mesh = normalize_mesh(intermediate_mesh)
+            # mesh2index size is 1024 because sparse_dit_1024 expects this grid structure
+            input_latent_index_for_1024 = mesh2index(intermediate_mesh, size=1024, factor=8)
+            input_latent_index_for_1024 = sort_block(
+                input_latent_index_for_1024, self.sparse_dit_1024.selection_block_size
+            )
+            print(f"Number of latent tokens for sparse_dit_1024: {len(input_latent_index_for_1024)}")
+
+            # Final sparse stage using sparse_1024 models
+            mesh = self.inference(image, self.sparse_vae_1024, self.sparse_dit_1024,
+                                self.sparse_image_encoder, self.sparse_scheduler_1024,
+                                generator=generator, mode='sparse', # CHANGED
+                                mc_threshold=sparse_mc_threshold, latent_index=input_latent_index_for_1024,
+                                remove_interior=False, # Final sparse stage
+                                target_voxel_resolution=sdf_resolution,
                                 **sparse_1024_sampler_params)[0]
             
         if remesh:
