@@ -204,4 +204,4 @@ if __name__ == "__main__":
     parser.add_argument("--cached_dir", type=str, default="outputs/web")
     args = parser.parse_args()
     
-    demo.queue().launch(share=True, allowed_paths=[args.cached_dir], server_port=7860)
+    demo.queue().launch(share=False, allowed_paths=[args.cached_dir], server_port=7860)
