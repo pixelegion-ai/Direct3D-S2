@@ -157,22 +157,22 @@ body { background:linear-gradient(215deg,#101113 0%,#0b0c0d 60%,#0d1014 100%) }
                 sdf_resolution_ui = gr.Radio(choices=["512", "1024"], label="SDF Target Resolution", value="1024", info="Target resolution for the final SDF. Affects which sparse stages run.")
                 
                 gr.Markdown("#### Dense Stage Parameters")
-                dense_steps_ui = gr.Number(label="Inference Steps", value=50, step=1, precision=0)
-                dense_guidance_ui = gr.Number(label="Guidance Scale", value=7.0, step=0.1)
+                dense_steps_ui = gr.Slider(minimum=10, maximum=100, step=1, label="Inference Steps", value=50)
+                dense_guidance_ui = gr.Slider(minimum=0.0, maximum=20.0, step=0.1, label="Guidance Scale", value=7.0)
                 dense_mc_threshold_ui = gr.Slider(minimum=0.01, maximum=1.0, step=0.01, label="Marching Cubes Threshold", value=0.1)
 
                 gr.Markdown("#### Sparse Stage (512) Parameters")
                 gr.Markdown("<p style='font-size:0.8em;color:grey'>This stage always runs. Its output is used directly if SDF Target Resolution is 512, or as input to the 1024 stage if 1024.</p>")
-                sparse_512_steps_ui = gr.Number(label="Inference Steps", value=30, step=1, precision=0)
-                sparse_512_guidance_ui = gr.Number(label="Guidance Scale", value=7.0, step=0.1)
+                sparse_512_steps_ui = gr.Slider(minimum=10, maximum=100, step=1, label="Inference Steps", value=30)
+                sparse_512_guidance_ui = gr.Slider(minimum=0.0, maximum=20.0, step=0.1, label="Guidance Scale", value=7.0)
                 sparse_512_mc_threshold_ui = gr.Slider(minimum=0.01, maximum=1.0, step=0.01, label="Marching Cubes Threshold", value=0.2)
                 
                 # Group for 1024-specific sparse parameters, visibility controlled by sdf_resolution_ui
                 with gr.Group(visible=True) as sparse_1024_params_group: 
                     gr.Markdown("#### Sparse Stage (1024) Parameters")
                     gr.Markdown("<p style='font-size:0.8em;color:grey'>These settings are used only if SDF Target Resolution is 1024.</p>")
-                    sparse_1024_steps_ui = gr.Number(label="Inference Steps", value=15, step=1, precision=0)
-                    sparse_1024_guidance_ui = gr.Number(label="Guidance Scale", value=7.0, step=0.1)
+                    sparse_1024_steps_ui = gr.Slider(minimum=5, maximum=50, step=1, label="Inference Steps", value=15)
+                    sparse_1024_guidance_ui = gr.Slider(minimum=0.0, maximum=20.0, step=0.1, label="Guidance Scale", value=7.0)
                     sparse_1024_mc_threshold_ui = gr.Slider(minimum=0.01, maximum=1.0, step=0.01, label="Marching Cubes Threshold", value=0.2)
                 
                 gr.Markdown("#### Mesh Postprocessing")
