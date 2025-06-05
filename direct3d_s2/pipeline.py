@@ -207,11 +207,11 @@ class Direct3DS2Pipeline(object):
             dit,
             conditioner,
             scheduler,
+            mode: str, # 'dense' or 'sparse'
             num_inference_steps: int = 30, 
             guidance_scale: int = 7.0, 
             generator: Optional[torch.Generator] = None,
             latent_index: torch.Tensor = None,
-            mode: str, # 'dense' or 'sparse'
             remove_interior: bool = False,
             mc_threshold: float = 0.02,
             target_voxel_resolution: Optional[int] = None): # ADDED
