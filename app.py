@@ -133,9 +133,39 @@ body { background:linear-gradient(215deg,#101113 0%,#0b0c0d 60%,#0d1014 100%) }
 
     # ▸ main workspace
     with gr.Row(equal_height=True):
-        # ---------- Controls ----------
+        # ---------- Options Column ----------
         with gr.Column(scale=3):
-            gr.Markdown("### Input", elem_classes="subtitle")
+            gr.Markdown("### Options", elem_classes="subtitle") # Changed title, removed Accordion
+            sdf_resolution_ui = gr.Radio(choices=["512", "1024"], label="SDF Target Resolution", value="1024", info="Target resolution for the final SDF. Affects which sparse stages run.")
+            
+            gr.Markdown("#### Dense Stage Parameters")
+            dense_steps_ui = gr.Slider(minimum=10, maximum=100, step=1, label="Inference Steps", value=50)
+            dense_guidance_ui = gr.Slider(minimum=0.0, maximum=20.0, step=0.1, label="Guidance Scale", value=7.0)
+            dense_mc_threshold_ui = gr.Slider(minimum=0.01, maximum=1.0, step=0.01, label="Marching Cubes Threshold", value=0.1)
+
+            gr.Markdown("#### Sparse Stage (512) Parameters")
+            gr.Markdown("<p style='font-size:0.8em;color:grey'>This stage always runs. Its output is used directly if SDF Target Resolution is 512, or as input to the 1024 stage if 1024.</p>")
+            sparse_512_steps_ui = gr.Slider(minimum=10, maximum=100, step=1, label="Inference Steps", value=30)
+            sparse_512_guidance_ui = gr.Slider(minimum=0.0, maximum=20.0, step=0.1, label="Guidance Scale", value=7.0)
+            sparse_512_mc_threshold_ui = gr.Slider(minimum=0.01, maximum=1.0, step=0.01, label="Marching Cubes Threshold", value=0.2)
+            
+            # Group for 1024-specific sparse parameters, visibility controlled by sdf_resolution_ui
+            with gr.Group(visible=True) as sparse_1024_params_group: 
+                gr.Markdown("#### Sparse Stage (1024) Parameters")
+                gr.Markdown("<p style='font-size:0.8em;color:grey'>These settings are used only if SDF Target Resolution is 1024.</p>")
+                sparse_1024_steps_ui = gr.Slider(minimum=5, maximum=50, step=1, label="Inference Steps", value=15)
+                sparse_1024_guidance_ui = gr.Slider(minimum=0.0, maximum=20.0, step=0.1, label="Guidance Scale", value=7.0)
+                sparse_1024_mc_threshold_ui = gr.Slider(minimum=0.01, maximum=1.0, step=0.01, label="Marching Cubes Threshold", value=0.2)
+            
+            gr.Markdown("#### Mesh Postprocessing")
+            simplify = gr.Checkbox(label="Simplify Mesh", value=True)
+            reduce_ratio = gr.Slider(0.1, 0.95, step=0.05, value=0.95, label="Faces Reduction Ratio")
+                
+            gen_btn = gr.Button("Generate 3D ✨", variant="primary", interactive=True)
+
+        # ---------- Input & Viewport Column ----------
+        with gr.Column(scale=6):
+            gr.Markdown("### Input", elem_classes="subtitle") # Moved Input section here
             image_input = gr.Image(
                 label="Image Input",
                 image_mode="RGBA",
@@ -144,7 +174,6 @@ body { background:linear-gradient(215deg,#101113 0%,#0b0c0d 60%,#0d1014 100%) }
                 height=260, 
                 elem_id="show_image",
             )
-            # gr.Markdown("<div style='text-align:center;opacity:.6'>Drag & drop or click to upload</div>")  
             processed_image = gr.Image(
                 label="Processed Image",
                 image_mode="RGBA",
@@ -153,38 +182,8 @@ body { background:linear-gradient(215deg,#101113 0%,#0b0c0d 60%,#0d1014 100%) }
                 height=260, 
                 elem_id="show_image",
             )
-            with gr.Accordion("Advanced Options", open=True):
-                sdf_resolution_ui = gr.Radio(choices=["512", "1024"], label="SDF Target Resolution", value="1024", info="Target resolution for the final SDF. Affects which sparse stages run.")
-                
-                gr.Markdown("#### Dense Stage Parameters")
-                dense_steps_ui = gr.Slider(minimum=10, maximum=100, step=1, label="Inference Steps", value=50)
-                dense_guidance_ui = gr.Slider(minimum=0.0, maximum=20.0, step=0.1, label="Guidance Scale", value=7.0)
-                dense_mc_threshold_ui = gr.Slider(minimum=0.01, maximum=1.0, step=0.01, label="Marching Cubes Threshold", value=0.1)
-
-                gr.Markdown("#### Sparse Stage (512) Parameters")
-                gr.Markdown("<p style='font-size:0.8em;color:grey'>This stage always runs. Its output is used directly if SDF Target Resolution is 512, or as input to the 1024 stage if 1024.</p>")
-                sparse_512_steps_ui = gr.Slider(minimum=10, maximum=100, step=1, label="Inference Steps", value=30)
-                sparse_512_guidance_ui = gr.Slider(minimum=0.0, maximum=20.0, step=0.1, label="Guidance Scale", value=7.0)
-                sparse_512_mc_threshold_ui = gr.Slider(minimum=0.01, maximum=1.0, step=0.01, label="Marching Cubes Threshold", value=0.2)
-                
-                # Group for 1024-specific sparse parameters, visibility controlled by sdf_resolution_ui
-                with gr.Group(visible=True) as sparse_1024_params_group: 
-                    gr.Markdown("#### Sparse Stage (1024) Parameters")
-                    gr.Markdown("<p style='font-size:0.8em;color:grey'>These settings are used only if SDF Target Resolution is 1024.</p>")
-                    sparse_1024_steps_ui = gr.Slider(minimum=5, maximum=50, step=1, label="Inference Steps", value=15)
-                    sparse_1024_guidance_ui = gr.Slider(minimum=0.0, maximum=20.0, step=0.1, label="Guidance Scale", value=7.0)
-                    sparse_1024_mc_threshold_ui = gr.Slider(minimum=0.01, maximum=1.0, step=0.01, label="Marching Cubes Threshold", value=0.2)
-                
-                gr.Markdown("#### Mesh Postprocessing")
-                simplify = gr.Checkbox(label="Simplify Mesh", value=True)
-                reduce_ratio = gr.Slider(0.1, 0.95, step=0.05, value=0.95, label="Faces Reduction Ratio")
-                
-            gen_btn = gr.Button("Generate 3D ✨", variant="primary", interactive=True)
-
-        # ---------- Viewport ----------
-        with gr.Column(scale=6):
+            
             gr.Markdown("### Model Viewer", elem_classes="subtitle")
-            # mesh_html = gr.HTML("<div id='mesh_viewport'>🌀 No mesh yet</div>")
             output_model_obj = gr.Model3D(
                 label="Output Model (OBJ Format)",
                 camera_position=(90.0, 90.0, 3.5),
