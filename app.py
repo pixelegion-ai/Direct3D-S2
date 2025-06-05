@@ -51,15 +51,16 @@ def check_input_image(input_image):
 # -----------------------------------------------------------------------------
 def image2mesh(
     image: Any,
-    sdf_resolution_ui: int = 1024,
+    sdf_resolution_ui: str = "1024", # Changed to string for Radio button
     dense_steps_ui: int = 50,
     dense_guidance_ui: float = 7.0,
     dense_mc_threshold_ui: float = 0.1,
     sparse_512_steps_ui: int = 30, 
     sparse_512_guidance_ui: float = 7.0,
+    sparse_512_mc_threshold_ui: float = 0.2, # New
     sparse_1024_steps_ui: int = 15,
     sparse_1024_guidance_ui: float = 7.0,
-    sparse_mc_threshold_ui: float = 0.2,
+    sparse_1024_mc_threshold_ui: float = 0.2, # New
     simplify: bool = True,
     simplify_ratio: float = 0.95,
     output_path: str = 'outputs/web'
@@ -83,12 +84,13 @@ def image2mesh(
 
     mesh = pipe(
         image, 
-        sdf_resolution=sdf_resolution_ui,
+        sdf_resolution=int(sdf_resolution_ui), # Convert string from Radio to int
         dense_sampler_params=dense_sampler_params,
         sparse_512_sampler_params=sparse_512_sampler_params,
         sparse_1024_sampler_params=sparse_1024_sampler_params,
         dense_mc_threshold=dense_mc_threshold_ui,
-        sparse_mc_threshold=sparse_mc_threshold_ui,
+        sparse_512_mc_threshold=sparse_512_mc_threshold_ui, # Pass specific threshold
+        sparse_1024_mc_threshold=sparse_1024_mc_threshold_ui, # Pass specific threshold
         remesh=simplify,
         simplify_ratio=simplify_ratio,
     )["mesh"]
@@ -152,27 +154,26 @@ body { background:linear-gradient(215deg,#101113 0%,#0b0c0d 60%,#0d1014 100%) }
                 elem_id="show_image",
             )
             with gr.Accordion("Advanced Options", open=True):
-                sdf_resolution_ui = gr.Number(label="SDF Target Resolution", value=1024, precision=0, minimum=64, step=32, info="Target resolution for the final SDF. Affects which sparse stages run.")
+                sdf_resolution_ui = gr.Radio(choices=["512", "1024"], label="SDF Target Resolution", value="1024", info="Target resolution for the final SDF. Affects which sparse stages run.")
                 
                 gr.Markdown("#### Dense Stage Parameters")
                 dense_steps_ui = gr.Number(label="Inference Steps", value=50, step=1, precision=0)
                 dense_guidance_ui = gr.Number(label="Guidance Scale", value=7.0, step=0.1)
-                dense_mc_threshold_ui = gr.Number(label="Marching Cubes Threshold", value=0.1, step=0.01)
+                dense_mc_threshold_ui = gr.Slider(minimum=0.01, maximum=1.0, step=0.01, label="Marching Cubes Threshold", value=0.1)
 
                 gr.Markdown("#### Sparse Stage (512) Parameters")
-                gr.Markdown("<p style='font-size:0.8em;color:grey'>This stage always runs. Its output is used directly if SDF Target Resolution ≤ 512, or as input to the 1024 stage if > 512.</p>")
+                gr.Markdown("<p style='font-size:0.8em;color:grey'>This stage always runs. Its output is used directly if SDF Target Resolution is 512, or as input to the 1024 stage if 1024.</p>")
                 sparse_512_steps_ui = gr.Number(label="Inference Steps", value=30, step=1, precision=0)
                 sparse_512_guidance_ui = gr.Number(label="Guidance Scale", value=7.0, step=0.1)
+                sparse_512_mc_threshold_ui = gr.Slider(minimum=0.01, maximum=1.0, step=0.01, label="Marching Cubes Threshold", value=0.2)
                 
                 # Group for 1024-specific sparse parameters, visibility controlled by sdf_resolution_ui
-                with gr.Group(visible=True) as sparse_1024_params_group: # Initial visibility can be True or based on default sdf_resolution_ui
+                with gr.Group(visible=True) as sparse_1024_params_group: 
                     gr.Markdown("#### Sparse Stage (1024) Parameters")
-                    gr.Markdown("<p style='font-size:0.8em;color:grey'>These settings are used only if SDF Target Resolution > 512.</p>")
+                    gr.Markdown("<p style='font-size:0.8em;color:grey'>These settings are used only if SDF Target Resolution is 1024.</p>")
                     sparse_1024_steps_ui = gr.Number(label="Inference Steps", value=15, step=1, precision=0)
                     sparse_1024_guidance_ui = gr.Number(label="Guidance Scale", value=7.0, step=0.1)
-
-                gr.Markdown("#### Sparse Stages Common Parameters")
-                sparse_mc_threshold_ui = gr.Number(label="Marching Cubes Threshold", value=0.2, step=0.01, info="Applied to all sparse stage mesh decoding.")
+                    sparse_1024_mc_threshold_ui = gr.Slider(minimum=0.01, maximum=1.0, step=0.01, label="Marching Cubes Threshold", value=0.2)
                 
                 gr.Markdown("#### Mesh Postprocessing")
                 simplify = gr.Checkbox(label="Simplify Mesh", value=True)
@@ -224,8 +225,8 @@ body { background:linear-gradient(215deg,#101113 0%,#0b0c0d 60%,#0d1014 100%) }
     rmbg = BiRefNet(device="cuda:0")
 
     # Callback to control visibility of 1024 sparse parameters
-    def toggle_1024_params_visibility(resolution_val):
-        return gr.update(visible=(resolution_val > 512))
+    def toggle_1024_params_visibility(resolution_val_str): # Input is string "512" or "1024"
+        return gr.update(visible=(resolution_val_str == "1024"))
 
     sdf_resolution_ui.change(
         fn=toggle_1024_params_visibility,
@@ -250,9 +251,10 @@ body { background:linear-gradient(215deg,#101113 0%,#0b0c0d 60%,#0d1014 100%) }
             dense_mc_threshold_ui,
             sparse_512_steps_ui,
             sparse_512_guidance_ui,
+            sparse_512_mc_threshold_ui, # Added
             sparse_1024_steps_ui,
             sparse_1024_guidance_ui,
-            sparse_mc_threshold_ui,
+            sparse_1024_mc_threshold_ui, # Added
             simplify, 
             reduce_ratio
         ],
