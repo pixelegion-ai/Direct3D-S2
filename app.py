@@ -30,6 +30,7 @@ class Glass(gr.themes.Soft):
             radius_size=sizes.radius_lg,
             font=fonts.GoogleFont("Inter"),
         )
+        
 
     def style(self):
         super().style()
@@ -266,5 +267,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--cached_dir", type=str, default="outputs/web")
     args = parser.parse_args()
+    torch.cuda.empty_cache()
     
     demo.queue().launch(share=False, allowed_paths=[args.cached_dir], server_port=7860)
