@@ -337,7 +337,7 @@ class Direct3DS2Pipeline(object):
                                     generator=generator, mode='sparse',
                                     mc_threshold=sparse_512_mc_threshold, # Use 512's MC threshold
                                     latent_index=latent_index,
-                                    remove_interior=True, # Refine output for the next stage
+                                    remove_interior=False, # Refine output for the next stage
                                     # target_voxel_resolution not passed, VAE uses its default
                                     **sparse_512_sampler_params)
             
